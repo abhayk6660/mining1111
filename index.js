@@ -1,6 +1,6 @@
 const mineflayer = require("mineflayer");
 
-// Right-side block mining
+// Block is on RIGHT side → confirmed by screenshot
 const TARGET_OFFSET = { x: 1, y: 0, z: 0 };
 
 function createBot() {
@@ -16,67 +16,80 @@ function createBot() {
         console.log("✔ Logged in!");
     });
 
-    bot.once("spawn", async () => {
+    bot.once("spawn", () => {
         console.log("✔ Spawned!");
 
+        // Auto login
         setTimeout(() => bot.chat("/login 86259233"), 1500);
+
+        // Auto warp
         setTimeout(() => bot.chat("/is warp abhay6660 mining"), 3500);
 
-        // DELAY START OF MINING TO FIX ERR_ASSERTION
+        // Start mining after warp is done
         setTimeout(() => safeStartMining(bot), 9000);
     });
 
-    bot.on("kicked", (r) => console.log("❌ Kicked:", r));
-    bot.on("error", (e) => console.log("⚠ Error:", e));
+    bot.on("kicked", r => console.log("❌ Kicked:", r));
+    bot.on("error", e => console.log("⚠ Error:", e));
 
     bot.on("end", () => {
-        console.log("🔁 Reconnecting in 5 sec...");
+        console.log("🔁 Reconnecting in 5 seconds...");
         setTimeout(createBot, 5000);
     });
 }
 
-// SAFE mining start (prevents ERR_ASSERTION)
+// Wait until bot.entity exists → prevents ERR_ASSERTION
 function safeStartMining(bot) {
     if (!bot.entity) {
-        console.log("⚠ Bot not fully loaded yet, retrying mining start...");
+        console.log("⏳ Bot not ready, retrying mining start...");
         return setTimeout(() => safeStartMining(bot), 1000);
     }
-
-    console.log("⛏ Starting safe HOLD-CLICK mining...");
+    console.log("⛏ Mining started — HOLD CLICK + NO ROTATION ACTIVE");
     startMining(bot);
 }
 
-// HOLD CLICK mining
+// ===============================
+// REAL HOLD-LEFT-CLICK MINING + NO ROTATION
+// ===============================
 function startMining(bot) {
 
-    // look loop
-    async function lookLoop() {
-        try {
-            const pos = bot.entity.position.offset(
-                TARGET_OFFSET.x, TARGET_OFFSET.y, TARGET_OFFSET.z
-            );
-            const block = bot.blockAt(pos);
+    // Lock rotation where bot spawned
+    const lockedYaw = bot.entity.yaw;
+    const lockedPitch = bot.entity.pitch;
 
-            if (block) {
-                await bot.lookAt(block.position.offset(0.5, 0.5, 0.5));
-            }
-        } catch {}
+    // Freeze rotation permanently
+    setInterval(() => {
+        bot.entity.yaw = lockedYaw;
+        bot.entity.pitch = lockedPitch;
+    }, 40);
 
-        setTimeout(lookLoop, 150);
-    }
-
-    // ATTACK LOOP — now SAFE because bot is fully spawned
+    // Hold LEFT-CLICK forever (real mining simulation)
     function attackLoop() {
         try {
-            bot.setControlState("attack", true);
-        } catch (err) {
-            console.log("⚠ attackLoop error, retrying:", err.message);
-        }
-        setTimeout(attackLoop, 80);
+            bot.setControlState("attack", true);  // HOLD LEFT-CLICK
+        } catch {}
+
+        setTimeout(attackLoop, 50); // NEVER RELEASE ATTACK
     }
 
-    lookLoop();
-    attackLoop();
+    // Optional: ensure we always face generator direction
+    // But NO rotation happens because yaw/pitch is locked
+
+    function faceBlockLoop() {
+        const pos = bot.entity.position.offset(
+            TARGET_OFFSET.x,
+            TARGET_OFFSET.y,
+            TARGET_OFFSET.z
+        );
+        bot.lookAt(pos, true).catch(() => {});
+        setTimeout(faceBlockLoop, 150);
+    }
+
+    // Comment this out if you don't want ANY look movement:
+    // faceBlockLoop();
+
+    attackLoop(); // Start mining
 }
 
 createBot();
+
