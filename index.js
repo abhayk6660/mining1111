@@ -1,4 +1,5 @@
 const mineflayer = require("mineflayer");
+const Vec3 = require("vec3");
 
 function createBot() {
     const bot = mineflayer.createBot({
@@ -12,44 +13,70 @@ function createBot() {
     bot.once("spawn", () => {
         console.log("✔ Spawned");
 
-        // login
         setTimeout(() => bot.chat("/login 86259233"), 1500);
-
-        // warp
         setTimeout(() => bot.chat("/is warp abhay6660 mining"), 3500);
 
-        // start attack loop
-        setTimeout(() => startSimpleAttack(bot), 8000);
+        setTimeout(() => startTrueMining(bot), 7000);
     });
 
-    bot.on("kicked", r => console.log("❌ Kicked:", r));
-    bot.on("error", e => console.log("⚠ Error:", e));
-    bot.on("end", () => {
-        console.log("🔁 Reconnecting...");
-        setTimeout(createBot, 5000);
-    });
+    bot.on("end", () => setTimeout(createBot, 5000));
+    bot.on("error", err => console.log("⚠", err));
 }
 
-// ⭐ SUPER SIMPLE: HOLD LEFT CLICK FOREVER ⭐
-function startSimpleAttack(bot) {
-    console.log("⛏ SIMPLE ATTACK MINING ENABLED");
+// THIS IS REAL MINING. NOT ATTACK.
+function sendMinePacket(bot, action, pos) {
+    try {
+        bot._client.write("player_block_dig", {
+            status: action,   // 0 = start, 1 = cancel, 2 = stop 
+            location: { x: pos.x, y: pos.y, z: pos.z },
+            face: 1
+        });
+    } catch (e) {
+        console.log("Packet error:", e.message);
+    }
+}
 
-    // Lock rotation (never rotate)
+function startTrueMining(bot) {
+    console.log("⛏ TRUE BLOCK MINING ENABLED");
+
+    // Position of block directly in front
+    const pos = bot.entity.position.offset(0, 0, 1).floored();
+
+    console.log("Target block:", pos);
+
+    // Lock rotation
     const yaw = bot.entity.yaw;
     const pitch = bot.entity.pitch;
+
     setInterval(() => {
         bot.entity.yaw = yaw;
         bot.entity.pitch = pitch;
-    }, 50);
+    }, 40);
 
-    // Hold left click every tick
+    // Always aim camera only
     setInterval(() => {
-        try {
-            bot.setControlState("attack", true); // HOLD ATTACK
-        } catch {}
-    }, 30);
+        bot.lookAt(pos.offset(0.5, 0.5, 0.5), true).catch(() => {});
+    }, 120);
 
-    console.log("🔥 Bot is now PERMANENTLY ATTACKING in front");
+    // MAIN MINING LOOP (uses REAL mining packets)
+    setInterval(() => {
+        const block = bot.blockAt(pos);
+        if (!block || block.type === 0) return; // no block yet
+
+        // START mining packet
+        sendMinePacket(bot, 0, pos);
+
+        // HOLD mining by spamming START
+        sendMinePacket(bot, 0, pos);
+
+        // SERVER WILL BREAK BLOCK automatically when damage completes
+    }, 80);
+
+    // RESET packet every few seconds (to avoid being ignored)
+    setInterval(() => {
+        sendMinePacket(bot, 1, pos); // cancel
+        sendMinePacket(bot, 0, pos); // restart
+    }, 4000);
 }
 
 createBot();
