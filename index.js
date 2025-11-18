@@ -1,7 +1,7 @@
 const mineflayer = require("mineflayer");
 
-// RIGHT-SIDE generator block mining with HOLD-CLICK
-const TARGET_OFFSET = { x: 1, y: 0, z: 0 }; // Block on the RIGHT side
+// Right-side block mining
+const TARGET_OFFSET = { x: 1, y: 0, z: 0 };
 
 function createBot() {
     const bot = mineflayer.createBot({
@@ -12,59 +12,67 @@ function createBot() {
         version: "1.21.1"
     });
 
-    bot.on("login", () => {
+    bot.once("login", () => {
         console.log("✔ Logged in!");
     });
 
-    bot.on("spawn", async () => {
-        console.log("✔ Spawned, sending login + warp");
+    bot.once("spawn", async () => {
+        console.log("✔ Spawned!");
 
-        // /login
         setTimeout(() => bot.chat("/login 86259233"), 1500);
-
-        // /is warp
         setTimeout(() => bot.chat("/is warp abhay6660 mining"), 3500);
 
-        // Start mining
-        setTimeout(() => startMining(bot), 7000);
+        // DELAY START OF MINING TO FIX ERR_ASSERTION
+        setTimeout(() => safeStartMining(bot), 9000);
     });
 
-    bot.on("kicked", (reason) => console.log("❌ Kicked:", reason));
-    bot.on("error", (err) => console.log("⚠ Error:", err));
+    bot.on("kicked", (r) => console.log("❌ Kicked:", r));
+    bot.on("error", (e) => console.log("⚠ Error:", e));
 
     bot.on("end", () => {
-        console.log("🔁 Bot disconnected — reconnecting in 5 sec");
+        console.log("🔁 Reconnecting in 5 sec...");
         setTimeout(createBot, 5000);
     });
 }
 
-// HOLD-CLICK MINING (works on all skyblock gens)
-function startMining(bot) {
-    console.log("⛏ HOLD-CLICK mining started (right side)");
+// SAFE mining start (prevents ERR_ASSERTION)
+function safeStartMining(bot) {
+    if (!bot.entity) {
+        console.log("⚠ Bot not fully loaded yet, retrying mining start...");
+        return setTimeout(() => safeStartMining(bot), 1000);
+    }
 
-    // Look at the block continuously
+    console.log("⛏ Starting safe HOLD-CLICK mining...");
+    startMining(bot);
+}
+
+// HOLD CLICK mining
+function startMining(bot) {
+
+    // look loop
     async function lookLoop() {
         try {
             const pos = bot.entity.position.offset(
-                TARGET_OFFSET.x,
-                TARGET_OFFSET.y,
-                TARGET_OFFSET.z
+                TARGET_OFFSET.x, TARGET_OFFSET.y, TARGET_OFFSET.z
             );
-
             const block = bot.blockAt(pos);
 
             if (block) {
                 await bot.lookAt(block.position.offset(0.5, 0.5, 0.5));
             }
-        } catch (e) {}
+        } catch {}
 
-        setTimeout(lookLoop, 120);
+        setTimeout(lookLoop, 150);
     }
 
-    // Hold left click forever
+    // ATTACK LOOP — now SAFE because bot is fully spawned
     function attackLoop() {
-        bot.setControlState("attack", true); // hold left click
-        setTimeout(attackLoop, 50);
+        try {
+            bot.setControlState("attack", true);
+        } catch (err) {
+            console.log("⚠ attackLoop error, retrying:", err.message);
+        }
+        setTimeout(attackLoop, 80);
     }
 
     lookLoop();
